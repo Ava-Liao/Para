@@ -12,7 +12,8 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        number,username,email,
-        password
+        number,username,email,password
     </sql>
+
+    <!-- 基础的CRUD操作由MyBatis-Plus提供 -->
 </mapper>
