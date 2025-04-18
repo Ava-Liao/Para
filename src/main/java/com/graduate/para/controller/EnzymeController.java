@@ -8,9 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import org.springframework.http.HttpStatus;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,41 +23,6 @@ public class EnzymeController {
     
     private final EnzymeService enzymeService;
     
-    @PostMapping("/import")
-    public ResponseEntity<?> importData(@RequestParam("file") MultipartFile file) {
-        log.info("Received file upload request: {}", file.getOriginalFilename());
-        try {
-            List<Enzyme> enzymeList = new ArrayList<>();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()));
-            String line;
-            // Skip header
-            reader.readLine();
-            
-            while ((line = reader.readLine()) != null) {
-                String[] data = line.split("\t");
-                if (data.length >= 3) {
-                    Enzyme enzyme = new Enzyme();
-                    enzyme.setEcNumber(data[0].trim());
-                    enzyme.setProtId(data[1].trim());
-                    enzyme.setKcat(Double.parseDouble(data[2].trim()));
-                    enzymeList.add(enzyme);
-                }
-            }
-            
-            enzymeService.saveBatch(enzymeList);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Successfully imported " + enzymeList.size() + " records");
-            response.put("count", enzymeList.size());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error importing enzyme data", e);
-            Map<String, String> response = new HashMap<>();
-            response.put("error", "Error importing data: " + e.getMessage());
-            return ResponseEntity.badRequest().body(response);
-        }
-    }
-    
     /**
      * 获取数据库中酶的总数量
      */
@@ -70,7 +33,8 @@ public class EnzymeController {
         result.put("count", enzymeService.count());
         return ResponseEntity.ok(result);
     }
-    
+
+
     /**
      * 查询酶数据（分页）
      */
@@ -126,14 +90,32 @@ public class EnzymeController {
     }
     
     /**
+     * 按底物名称查询
+     */
+    @GetMapping("/findBySub")
+    public ResponseEntity<?> findBySub(@RequestParam String sub) {
+        log.info("Searching enzymes by substrate name: {}", sub);
+        LambdaQueryWrapper<Enzyme> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.like(Enzyme::getSub, sub);
+        List<Enzyme> enzymes = enzymeService.list(queryWrapper);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("count", enzymes.size());
+        result.put("records", enzymes);
+        
+        return ResponseEntity.ok(result);
+    }
+    
+    /**
      * 同时按EC号和蛋白ID查询kcat
      */
     @GetMapping("/findKcat")
     public ResponseEntity<?> findKcat(
             @RequestParam(required = false) String ecNumber,
-            @RequestParam(required = false) String protId) {
+            @RequestParam(required = false) String protId,
+            @RequestParam(required = false) String sub) {
         
-        log.info("Searching kcat by EC number: {} and protein ID: {}", ecNumber, protId);
+        log.info("Searching kcat by EC number: {}, protein ID: {}, and substrate: {}", ecNumber, protId, sub);
         
         LambdaQueryWrapper<Enzyme> queryWrapper = new LambdaQueryWrapper<>();
         boolean hasCondition = false;
@@ -148,9 +130,14 @@ public class EnzymeController {
             hasCondition = true;
         }
         
+        if (sub != null && !sub.isEmpty()) {
+            queryWrapper.like(Enzyme::getSub, sub);
+            hasCondition = true;
+        }
+        
         if (!hasCondition) {
             Map<String, String> response = new HashMap<>();
-            response.put("error", "At least one parameter (ecNumber or protId) is required");
+            response.put("error", "At least one parameter (ecNumber, protId, or sub) is required");
             return ResponseEntity.badRequest().body(response);
         }
         
@@ -163,7 +150,11 @@ public class EnzymeController {
             item.put("ecNumber", enzyme.getEcNumber());
             item.put("protId", enzyme.getProtId());
             item.put("kcat", enzyme.getKcat());
-            item.put("formattedKcat", String.format("%.2e", enzyme.getKcat()));
+            item.put("formattedKcat", String.format("%.4f", enzyme.getKcat()));
+            item.put("sub", enzyme.getSub());
+            item.put("smiles", enzyme.getSmiles());
+            item.put("sequences", enzyme.getSequences());
+            item.put("predicted", enzyme.getPredicted());
             resultList.add(item);
         }
         
@@ -201,8 +192,57 @@ public class EnzymeController {
         result.put("ecNumber", enzyme.getEcNumber());
         result.put("protId", enzyme.getProtId());
         result.put("kcat", enzyme.getKcat());
-        result.put("formattedKcat", String.format("%.2e", enzyme.getKcat()));
+        result.put("formattedKcat", String.format("%.4f", enzyme.getKcat()));
+        result.put("sub", enzyme.getSub());
+        result.put("smiles", enzyme.getSmiles());
+        result.put("sequences", enzyme.getSequences());
+        result.put("predicted", enzyme.getPredicted());
         
         return ResponseEntity.ok(result);
+    }
+    
+    /**
+     * 保存酶数据到数据库
+     * 接收前端发送的预测结果
+     */
+    @PostMapping("/save")
+    public ResponseEntity<?> saveEnzyme(@RequestBody Enzyme enzyme) {
+        log.info("Saving enzyme data: {}", enzyme);
+        
+        try {
+            // 确保标记为预测值
+            if (enzyme.getPredicted() == null) {
+                enzyme.setPredicted(1);
+            }
+            
+            // 为空的EC号和蛋白ID设置默认值
+            if (enzyme.getEcNumber() == null || enzyme.getEcNumber().isEmpty()) {
+                enzyme.setEcNumber("unknown");
+            }
+            
+            if (enzyme.getProtId() == null || enzyme.getProtId().isEmpty()) {
+                enzyme.setProtId("unknown");
+            }
+            
+            // 保存到数据库
+            boolean saved = enzymeService.save(enzyme);
+            
+            if (saved) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", true);
+                result.put("message", "Enzyme data saved successfully");
+                result.put("id", enzyme.getId());
+                return ResponseEntity.ok(result);
+            } else {
+                Map<String, String> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Failed to save enzyme data");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            }
+        } catch (Exception e) {
+            log.error("Error while saving enzyme data", e);
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Error while saving enzyme data: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
     }
 } 
