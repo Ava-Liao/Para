@@ -77,8 +77,6 @@ public class CsvImportUtil {
                 if (line.length >= 3) {
                     try {
                         Enzyme enzyme = new Enzyme();
-                        enzyme.setEcNumber(line[0].trim());
-                        enzyme.setProtId(line[1].trim());
                         enzyme.setKcat(Double.parseDouble(line[2].trim()));
                         enzymeList.add(enzyme);
                         count++;

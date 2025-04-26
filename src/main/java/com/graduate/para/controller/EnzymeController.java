@@ -55,39 +55,6 @@ public class EnzymeController {
         return ResponseEntity.ok(result);
     }
     
-    /**
-     * 按EC号查询
-     */
-    @GetMapping("/findByEc")
-    public ResponseEntity<?> findByEc(@RequestParam String ecNumber) {
-        log.info("Searching enzymes by EC number: {}", ecNumber);
-        LambdaQueryWrapper<Enzyme> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.like(Enzyme::getEcNumber, ecNumber);
-        List<Enzyme> enzymes = enzymeService.list(queryWrapper);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("count", enzymes.size());
-        result.put("records", enzymes);
-        
-        return ResponseEntity.ok(result);
-    }
-    
-    /**
-     * 按蛋白ID查询
-     */
-    @GetMapping("/findByProtId")
-    public ResponseEntity<?> findByProtId(@RequestParam String protId) {
-        log.info("Searching enzymes by protein ID: {}", protId);
-        LambdaQueryWrapper<Enzyme> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.like(Enzyme::getProtId, protId);
-        List<Enzyme> enzymes = enzymeService.list(queryWrapper);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("count", enzymes.size());
-        result.put("records", enzymes);
-        
-        return ResponseEntity.ok(result);
-    }
     
     /**
      * 按底物名称查询
@@ -105,39 +72,53 @@ public class EnzymeController {
         
         return ResponseEntity.ok(result);
     }
+
+     /**
+     * 按底物结构查询
+     */
+    @GetMapping("/findBySmiles")
+    public ResponseEntity<?> findBySmiles(@RequestParam String smiles) {
+        log.info("Searching enzymes by substrate name: {}", smiles);
+        LambdaQueryWrapper<Enzyme> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.like(Enzyme::getSmiles, smiles);
+        List<Enzyme> enzymes = enzymeService.list(queryWrapper);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("count", enzymes.size());
+        result.put("records", enzymes);
+        
+        return ResponseEntity.ok(result);
+    }
+
     
     /**
-     * 同时按EC号和蛋白ID查询kcat
+     * 通过底物名称和底物结构(SMILES)查询kcat
      */
     @GetMapping("/findKcat")
     public ResponseEntity<?> findKcat(
-            @RequestParam(required = false) String ecNumber,
-            @RequestParam(required = false) String protId,
-            @RequestParam(required = false) String sub) {
+            @RequestParam(required = false) String sub,
+            @RequestParam(required = false) String smiles) {
         
-        log.info("Searching kcat by EC number: {}, protein ID: {}, and substrate: {}", ecNumber, protId, sub);
+        log.info("Searching kcat by substrate: {}, SMILES: {}", 
+                sub, smiles);
         
         LambdaQueryWrapper<Enzyme> queryWrapper = new LambdaQueryWrapper<>();
         boolean hasCondition = false;
-        
-        if (ecNumber != null && !ecNumber.isEmpty()) {
-            queryWrapper.like(Enzyme::getEcNumber, ecNumber);
-            hasCondition = true;
-        }
-        
-        if (protId != null && !protId.isEmpty()) {
-            queryWrapper.like(Enzyme::getProtId, protId);
-            hasCondition = true;
-        }
+    
         
         if (sub != null && !sub.isEmpty()) {
             queryWrapper.like(Enzyme::getSub, sub);
             hasCondition = true;
         }
         
+        if (smiles != null && !smiles.isEmpty()) {
+            queryWrapper.like(Enzyme::getSmiles, smiles);
+            hasCondition = true;
+        }
+        
         if (!hasCondition) {
             Map<String, String> response = new HashMap<>();
-            response.put("error", "At least one parameter (ecNumber, protId, or sub) is required");
+            response.put("error", "At least one parameter (sub or smiles) is required");
             return ResponseEntity.badRequest().body(response);
         }
         
@@ -147,56 +128,19 @@ public class EnzymeController {
         for (Enzyme enzyme : enzymes) {
             Map<String, Object> item = new HashMap<>();
             item.put("id", enzyme.getId());
-            item.put("ecNumber", enzyme.getEcNumber());
-            item.put("protId", enzyme.getProtId());
             item.put("kcat", enzyme.getKcat());
             item.put("formattedKcat", String.format("%.4f", enzyme.getKcat()));
             item.put("sub", enzyme.getSub());
             item.put("smiles", enzyme.getSmiles());
             item.put("sequences", enzyme.getSequences());
             item.put("predicted", enzyme.getPredicted());
+            item.put("temperature", enzyme.getTemperature());
             resultList.add(item);
         }
         
         Map<String, Object> result = new HashMap<>();
         result.put("count", enzymes.size());
         result.put("records", resultList);
-        
-        return ResponseEntity.ok(result);
-    }
-    
-    /**
-     * 精确查询: 根据准确的EC号和蛋白ID查询kcat
-     */
-    @GetMapping("/getExactKcat")
-    public ResponseEntity<?> getExactKcat(
-            @RequestParam String ecNumber,
-            @RequestParam String protId) {
-        
-        log.info("Searching exact kcat by EC number: {} and protein ID: {}", ecNumber, protId);
-        
-        LambdaQueryWrapper<Enzyme> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(Enzyme::getEcNumber, ecNumber)
-                   .eq(Enzyme::getProtId, protId);
-        
-        Enzyme enzyme = enzymeService.getOne(queryWrapper);
-        
-        if (enzyme == null) {
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "No enzyme found with the given EC number and protein ID");
-            return ResponseEntity.ok(response);
-        }
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", enzyme.getId());
-        result.put("ecNumber", enzyme.getEcNumber());
-        result.put("protId", enzyme.getProtId());
-        result.put("kcat", enzyme.getKcat());
-        result.put("formattedKcat", String.format("%.4f", enzyme.getKcat()));
-        result.put("sub", enzyme.getSub());
-        result.put("smiles", enzyme.getSmiles());
-        result.put("sequences", enzyme.getSequences());
-        result.put("predicted", enzyme.getPredicted());
         
         return ResponseEntity.ok(result);
     }
@@ -210,18 +154,9 @@ public class EnzymeController {
         log.info("Saving enzyme data: {}", enzyme);
         
         try {
-            // 确保标记为预测值
+            // 确保标记为预测值，如果为空设置默认值为1
             if (enzyme.getPredicted() == null) {
                 enzyme.setPredicted(1);
-            }
-            
-            // 为空的EC号和蛋白ID设置默认值
-            if (enzyme.getEcNumber() == null || enzyme.getEcNumber().isEmpty()) {
-                enzyme.setEcNumber("unknown");
-            }
-            
-            if (enzyme.getProtId() == null || enzyme.getProtId().isEmpty()) {
-                enzyme.setProtId("unknown");
             }
             
             // 保存到数据库

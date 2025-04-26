@@ -22,16 +22,6 @@ public class Enzyme implements Serializable {
     private Long id;
 
     /**
-     * EC number
-     */
-    private String ecNumber;
-
-    /**
-     * Protein ID
-     */
-    private String protId;
-
-    /**
      * kcat value
      */
     private Double kcat;
@@ -52,9 +42,14 @@ public class Enzyme implements Serializable {
     private String sequences;
 
     /**
-     * 是否为预测值: 0-真实值, 1-预测值
+     * 是否为预测值: 0-真实值, 1-UniKP预测, 2-DLTKcat预测, 3-DLKcat预测
      */
     private Integer predicted;
+
+    /**
+     * 温度参数（摄氏度）
+     */
+    private Double temperature;
 
     /**
      * 创建时间
@@ -82,13 +77,12 @@ public class Enzyme implements Serializable {
         }
         Enzyme other = (Enzyme) that;
         return (this.getId() == null ? other.getId() == null : this.getId().equals(other.getId()))
-            && (this.getEcNumber() == null ? other.getEcNumber() == null : this.getEcNumber().equals(other.getEcNumber()))
-            && (this.getProtId() == null ? other.getProtId() == null : this.getProtId().equals(other.getProtId()))
             && (this.getKcat() == null ? other.getKcat() == null : this.getKcat().equals(other.getKcat()))
             && (this.getSub() == null ? other.getSub() == null : this.getSub().equals(other.getSub()))
             && (this.getSmiles() == null ? other.getSmiles() == null : this.getSmiles().equals(other.getSmiles()))
             && (this.getSequences() == null ? other.getSequences() == null : this.getSequences().equals(other.getSequences()))
             && (this.getPredicted() == null ? other.getPredicted() == null : this.getPredicted().equals(other.getPredicted()))
+            && (this.getTemperature() == null ? other.getTemperature() == null : this.getTemperature().equals(other.getTemperature()))
             && (this.getCreatedTime() == null ? other.getCreatedTime() == null : this.getCreatedTime().equals(other.getCreatedTime()))
             && (this.getUpdatedTime() == null ? other.getUpdatedTime() == null : this.getUpdatedTime().equals(other.getUpdatedTime()));
     }
@@ -98,13 +92,12 @@ public class Enzyme implements Serializable {
         final int prime = 31;
         int result = 1;
         result = prime * result + ((getId() == null) ? 0 : getId().hashCode());
-        result = prime * result + ((getEcNumber() == null) ? 0 : getEcNumber().hashCode());
-        result = prime * result + ((getProtId() == null) ? 0 : getProtId().hashCode());
         result = prime * result + ((getKcat() == null) ? 0 : getKcat().hashCode());
         result = prime * result + ((getSub() == null) ? 0 : getSub().hashCode());
         result = prime * result + ((getSmiles() == null) ? 0 : getSmiles().hashCode());
         result = prime * result + ((getSequences() == null) ? 0 : getSequences().hashCode());
         result = prime * result + ((getPredicted() == null) ? 0 : getPredicted().hashCode());
+        result = prime * result + ((getTemperature() == null) ? 0 : getTemperature().hashCode());
         result = prime * result + ((getCreatedTime() == null) ? 0 : getCreatedTime().hashCode());
         result = prime * result + ((getUpdatedTime() == null) ? 0 : getUpdatedTime().hashCode());
         return result;
@@ -117,13 +110,12 @@ public class Enzyme implements Serializable {
         sb.append(" [");
         sb.append("Hash = ").append(hashCode());
         sb.append(", id=").append(id);
-        sb.append(", ecNumber=").append(ecNumber);
-        sb.append(", protId=").append(protId);
         sb.append(", kcat=").append(kcat);
         sb.append(", sub=").append(sub);
         sb.append(", smiles=").append(smiles);
         sb.append(", sequences=").append(sequences);
         sb.append(", predicted=").append(predicted);
+        sb.append(", temperature=").append(temperature);
         sb.append(", createdTime=").append(createdTime);
         sb.append(", updatedTime=").append(updatedTime);
         sb.append(", serialVersionUID=").append(serialVersionUID);
